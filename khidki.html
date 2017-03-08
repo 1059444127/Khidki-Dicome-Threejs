@@ -1,0 +1,1780 @@
+    <meta charset="utf-8">
+    <meta name="author" content="Torsten Sprenger">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link href='http://fonts.googleapis.com/css?family=Fauna+One' rel='stylesheet' type='text/css'>
+    <link href='css/style.css' rel='stylesheet' type='text/css'>
+    <script type="text/javascript" src="js/Detector.js"></script>
+    <script type="text/javascript" src="js/jquery.min.js"></script>
+    <script type="text/javascript" src="js/three.min.js"></script>
+    <script type="text/javascript" src="js/leap.min.js"></script>
+    <script type="text/javascript" src="js/LeapCameraControls.js"></script>
+    <script type="text/javascript" src="js/LeapObjectControls.js"></script>
+
+
+
+
+
+
+
+
+<title>Khidki AR</title>
+<body >
+<center>
+</div>
+
+
+<div id="viewPort" style="position:absolute; top:40; left:0; width:100%; display:none">
+
+
+ <div id="local">
+ <canvas id="c"   width="10" "></canvas>
+            <video id="localVideo"  autoplay="autoplay"  style="display: none;" />
+            <video id="video" preload=auto autoplay controls>
+
+        </div>
+                <br><br><br><br>
+
+
+  <canvas id="canvasCube"    style="position:absolute;;"></canvas><br>
+    <canvas id="canvasGl"  top:200; controls"></canvas><br>
+
+     <div id="container"   style="position:absolute; top:250; "></div>
+    <div id="cursor"></div>
+<script src="http://cdnjs.cloudflare.com/ajax/libs/three.js/r68/three.min.js"></script>
+<canvas id="myCanvas" height="300" width="300" style="display: none" "></canvas><br>
+
+
+
+
+
+
+<font size=-1><output id="imageinfo"></output></font><br><br><br>
+
+
+
+
+
+
+</div>
+
+<div id="toolbox" style="position:fixed; top:10; left:10; display:none">
+</div>
+
+<div id="patientInfo" style="position:fixed; top:0; right:0; display:none">
+<table width=100%><tr><td align=right>
+<span id="dcmInfo"></span>
+</td></tr>
+<tr><td align=right>
+<table border=1 ><tr><td><center>
+Window:<br>
+
+<button id="join-room"  class="btn btn-sub" >Join Room</button>
+
+<button id="open-room"    class="btn btn-sub" >Open Room</button>
+<button onclick="enableDrawing()">Draw Enable</button>
+
+<button onclick="disableDrawing()">Draw Disable</button>
+
+<button onclick="eraseDrawing()">Erace Dicome</button>
+
+<br><br>
+   <label for="room-id">Enter Room Id </label>
+<input type="text" id="room-id" value="wanClouds">
+
+<button id="open-or-join-room"  style=" display:none;">Auto Open Or Join Room</button>
+<hr>
+ <div id="videos-container"  ></div>
+<div  style=" display:none; id="chat-container">
+    <input type="text" id="input-text-chat" placeholder="..." disabled>
+    <button id="share-file" disabled>...</button>
+    <br>
+
+
+
+    <div id="file-container"></div>
+    <div class="chat-output"></div>
+</div>
+<hr>
+
+<input type="button" value="Reset" onClick="resetAll()"><br>
+Tools:<br>
+
+<br>
+<input type="button" value="New Patient" onClick="javascript:window.location.reload()"><br>
+</center>
+</td></tr></table>
+</td></tr></table>
+</div>
+
+<div id="fileLoaderLanding" style="position:absolute; top:600; left:0; width:100%; ">
+<table width=500 border=2 bgcolor=999999><tr><td align=center>
+<br><br><br><br><font size=+2><span id="fileProgressArea">Drop Multiple DCM Files Here</span></font><br><br><br><br><br>
+</td></table><br>
+<font color=#ffffff> or <input type="file" id="dcmFiles" multiple></font><br>
+</div>
+
+<div id="header" style="position:fixed; top:0; left:0; width:100%">
+<center>
+<font size=+2 face="calibri"><b>AR Based P2P Collabrative Medical Image Manipulation </b></font><hr size=1 width=70%>
+</center>
+
+
+
+</center>
+</body>
+
+<div id="showCurveDiv" style="display: none; position: absolute; top: 10; left: 10; width: 900; height: 600; background-color: #FFFFFF">
+<center>
+<table bgcolor=000000 width=100% cellpadding=0 cellspacing=0><tr><td align=center><a href="javascript:closeShowCurveDiv()"><b>[ CLOSE ]</b></a></td></tr></table>
+<iframe id="showCurveIFrame" width=880 height=560></iframe>
+</center></div>
+
+<script>
+
+var dcmFiles = document.getElementById('dcmFiles');
+var pixelData = [];
+var TE = [];
+var lastFoundTagLocation;
+var fileDisplayArea = document.getElementById('fileDisplayArea');
+var fileProgressArea = document.getElementById('fileProgressArea');
+var firstInstanceNumber = 1000;
+var totalSlices;
+var t = 0;
+var pixelDataStart;
+var canvas = document.getElementById('myCanvas');
+var ctx = canvas.getContext('2d');
+var canvasData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+var canvasDataBeforeGraphics = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+//Code starts running here//baseline variable declaration
+var img = new Image(); // for use with scaling
+var pixels = []; // global for use in pixelLens
+var ROI = []; //contains highlighted pixels[]
+var defaultWindowCenter = 0;
+var defaultWindowWidth = 1024;
+var windowCenter = 0;
+var windowWidth = 1024;
+var initialWindowCenter = 0;
+var initialWindowWidth = 1024;
+var windowCenterArray = ['default', 40, 70, 40, -600, 450]; //default, brain, subdural, soft tissue, lung, bone
+var windowWidthArray = ['default', 80, 170, 400, 1200, 1500];
+var currentWindowArray = 0;
+var sliceStream = []; //CSV of pixelData retrieved from pngToGray.php
+var currentSlice = 1;
+var height;
+var width;
+var rowDistance = 0.74;
+var colDistance = 0.74;
+var HUcorrection = 0;
+var pixelRepresentation;
+var bitsAllocated = 16;
+var RGB = 0;
+var numberOfFrames;
+
+var baseX = 0;
+var baseY = 0;
+var initialBaseX = 0;
+var initialBaseY = 0;
+var initialZoom = 1;
+var panX = 0;
+var panY = 0;
+var zoom = 1;
+var invert = 1; //default is positive
+var downScale = 1;
+var pixelArray = [];
+var previousS; // if s doesnt change, no need to modify canvasdata
+
+dcmFiles.addEventListener('change', function(e) {
+	fileProgressArea.innerHTML = "Loading...<br><br><font size=-1>This may take a few seconds for large / multiple DICOM files...</font>";
+	totalSlices = dcmFiles.files.length;
+	for (var i = 0; i < dcmFiles.files.length; i++) { readFiles(dcmFiles.files[i]); }
+	});
+
+function readFiles(file) {
+	var name = file.name;
+	var reader = new FileReader();  
+	reader.onload = function(e) {  
+		//get file content  
+		//support different file content headers, esp OS X
+		var lastPos = e.target.result.indexOf('base64,') + 7; 
+		var content = base64ToHex(e.target.result.substring(lastPos, e.target.result.length));				 	
+		pixelDataStart = content.lastIndexOf('e07f1000');
+		//get DICOM data from 1st slice
+
+		if (t == 0) {
+			var transferSyntax = getDcmTag(content, '02001000');
+			transferSyntax = transferSyntax.substr(0,transferSyntax.length-1);
+
+			if (transferSyntax != "1.2.840.10008.1.2.1") {
+				('Detected Transfer Syntax: ' + transferSyntax + '\nPotential Error:\nDICOM file does not appear to be Uncompressed\n(Imp / Exp VR Little Endian).\n\nWill attempt to continue...');
+				}
+			var patientName = getDcmTag(content, '10001000');
+			var patientMRN = getDcmTag(content, '10002000');
+			var modality = getDcmTag(content, '08006000');
+			pixelRepresentation = parseInt(getDcmTag(content, '28000301'));
+			HUcorrection = parseInt(getDcmTag(content, '28005210')) || 0;
+			var windowCenterTag = getDcmTag(content, '28005010').split('\\');
+			windowCenter = parseInt(windowCenterTag[0]);
+			defaultWindowCenter = windowCenter;
+			initialWindowCenter = windowCenter;
+			var windowWidthTag = getDcmTag(content, '28005110').split('\\');
+			windowWidth = parseInt(windowWidthTag[0]);
+			defaultWindowWidth = windowWidth;
+			initialWindowWidth = windowWidth;
+			bitsAllocated = getDcmTag(content, '28000001');
+			var photometricInterpretation = getDcmTag(content, '28000400');
+			if (photometricInterpretation == "MONOCHROME1 ") { invert = -1; }
+			if (photometricInterpretation.indexOf('RGB') != -1) { RGB = 1; }
+			var studyDescription = getDcmTag(content, '08003010');
+			var seriesDescription = getDcmTag(content, '08003e10');
+			var studyDate = getDcmTag(content, '08002000');
+			var col = getDcmTag(content, '28001100');
+			var row = getDcmTag(content, '28001000');
+			var pixelspaces = getDcmTag(content, '28003000').split('\\');
+			rowDistance = parseFloat(pixelspaces[0]);
+			colDistance = parseFloat(pixelspaces[1]);
+			numberOfFrames = getDcmTag(content, '28000800');
+	
+			document.getElementById('dcmInfo').innerHTML = "<b>" + patientName + " (" + patientMRN + ")</b><br>" + modality + " " + studyDescription + " (" + seriesDescription + ")<br>Date: " + studyDate;	
+
+			//downScaling for large files, eg CRs
+			if (row > 2048) {
+				row = row/2;
+				col = col/2;
+				downScale = downScale/2;
+				}
+			if (row > 1024) {
+				row = row/2;
+				col = col/2;
+				downScale = downScale/2;
+				}
+			height = row;
+			width = col;
+			canvas.height = row;
+			canvas.width = col;
+			}
+		
+		//instance
+		var instanceNumber = getDcmTag(content, '20001300');
+		instanceNumber = instanceNumber.replace(" ", "");
+		if (instanceNumber < firstInstanceNumber) { firstInstanceNumber = instanceNumber; }
+
+		//TE 
+		TE[instanceNumber] = getDcmTag(content, '18008100');
+		TE[instanceNumber] = TE[instanceNumber].replace(" ", "");
+
+		//pixelData
+		pixelDataStart = content.lastIndexOf('e07f1000');
+		var VR = hex2a(content.substr(pixelDataStart+8, 4));
+		if (VR != "OW") { pixelDataStart -= 8; }
+		var pixelDataLengthLE = content.substr(pixelDataStart+16, 8);
+		var pixelDataLengthHex = "" + pixelDataLengthLE.substr(6,2) + pixelDataLengthLE.substr(4,2) + pixelDataLengthLE.substr(2,2) + pixelDataLengthLE.substr(0,2);
+		var pixelDataLength = parseInt(pixelDataLengthHex, 16);
+		var pixelDataRaw = content.substr(pixelDataStart+24, pixelDataLength*2);
+		pixelArray[instanceNumber] = hexLEtoDec(pixelDataRaw,bitsAllocated);
+
+		if (numberOfFrames > 1) {
+			//treat each frame as an instance
+			var allFramesPixelData = pixelArray[instanceNumber]; //assume 1 multi-frame file only
+			var frameSize = row * col;
+			for (var i = 1; i <= numberOfFrames; i++) {
+				pixelArray[i] = allFramesPixelData.slice((i-1) * frameSize, ((i-1) * frameSize) + frameSize);
+				}
+			//get the TEs, separated for now, can push back into the previous FOR loop for PROD
+			lastFoundTagLocation = content.indexOf('00523092'); //set initial start point at perFrameFunctionalGroupSequence 
+			for (var i = 1; i <= numberOfFrames; i++) {
+				TE[i] = getDcmTag(content, '18008290', lastFoundTagLocation+1);
+				}
+			}
+		t++;
+		
+		//check for load complete
+		if (t == totalSlices) { 
+			//inform complete and draw 1st slice
+			document.getElementById('viewPort').style.display = "block";
+			document.getElementById('toolbox').style.display = "block";
+			document.getElementById('patientInfo').style.display = "block";
+			document.getElementById('fileLoaderLanding').style.display = "none";
+			fileProgressArea.innerHTML = "Loading Complete"; 
+			ctx = canvas.getContext('2d');
+			canvasData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			canvasDataBeforeGraphics = ctx.getImageData(0, 0, canvas.width, canvas.height);
+			//draw the first instance (currentSlice = 1 by default or smallest instance on loaded files)
+			currentSlice = +firstInstanceNumber;
+			drawSlice(currentSlice,0,0,0,0,0,0,0);
+			}
+		}
+	reader.readAsDataURL(file);
+	}
+
+//draws on the canvas based on direct call or from adjust() function
+function drawSlice(s, windowCenterAdj, windowWidthAdj, panX, panY, zoomAdj, initialLeftX, initialLeftY, force) {
+
+	force = force || 0;
+	baseX = initialBaseX + panX; // for panning
+	baseY = initialBaseY + panY; 
+	
+	if (s != previousS || windowCenterAdj != 0 || windowWidthAdj != 0 || force == 1) { //no need to derive canvasdata if same slice or unchanged window
+		//my simple windowing algoritm because image data-string is 12-bit. HTML5 canvas is 8-bit (grayscale). 
+		//Algorithm needed to parse 12-bit depth into 8-bit depth. 
+		windowCenter = initialWindowCenter + windowCenterAdj;
+		windowWidth = initialWindowWidth + windowWidthAdj; 
+		var low = (windowCenter) - (windowWidth / 2); 
+		var high = (windowCenter) + (windowWidth / 2); 
+		var grad = (high - low) / 255;
+	
+		var p = 0;
+		if (RGB == 1) {
+
+			var pix = [];
+			for (var i = 0; i < height; i++) {
+				for (var j = 0; j < width; j++) { 
+					pix[0] = parseInt(pixelArray[s][p]) + HUcorrection; //Red
+					pix[1] = parseInt(pixelArray[s][p+1]) + HUcorrection; //Green
+					pix[2] = parseInt(pixelArray[s][p+2]) + HUcorrection; //Blue
+		
+					for (var q = 0; q < 3; q++) {
+						if (pix[q] < low) { pix[q] = 0; } else
+						if (pix[q] >= low && pix[q] <= high) {
+							pix[q] = (pix[q] - low) / grad;
+							} else
+						if (pix[q] > high) { pix[q] = 255; }
+						pix[q] = Math.round(pix[q]);
+						if (invert == -1) {
+							pix[q] = 255 - pix[q];
+							}
+						}
+					var pixDecAlpha = 255;
+////					if (ROI[p] == 1) {
+////						pixDecRed = pix;
+////						pixDecGreen = pix;
+////						pixDecBlue = 0;
+////						pixDecAlpha = 120;
+////						}
+					var index = (j + i * canvas.width) * 4;
+					canvasData.data[index + 0] = pix[0];
+					canvasData.data[index + 1] = pix[1];
+					canvasData.data[index + 2] = pix[2];
+					canvasData.data[index + 3] = pixDecAlpha;
+					p += 3;
+					}
+				}
+			} else {  //RGB == 0
+			for (var i = 0; i < height; i++) {
+				for (var j = 0; j < width; j++) { 
+					var pix = parseInt(pixelArray[s][p]) + HUcorrection;
+		
+					if (pix < low) { pix = 0; } else
+					if (pix >= low && pix <= high) {
+						pix = (pix - low) / grad;
+						} else
+					if (pix > high) { pix = 255; }
+					pix = Math.round(pix);
+					if (invert == -1) {
+						pix = 255 - pix;
+						}
+					var pixDecRed = pix;
+					var pixDecGreen = pix;
+					var pixDecBlue = pix;
+					var pixDecAlpha = 255;
+					if (ROI[p] == 1) {
+						pixDecRed = pix;
+						pixDecGreen = pix;
+						pixDecBlue = 0;
+						pixDecAlpha = 120;
+						}
+					var index = (j + i * canvas.width) * 4;
+					canvasData.data[index + 0] = pixDecRed;
+					canvasData.data[index + 1] = pixDecGreen;
+					canvasData.data[index + 2] = pixDecBlue;
+					canvasData.data[index + 3] = pixDecAlpha;
+					p++;
+					}
+				}
+			}
+		}
+	if (panX != 0 || panY != 0) {
+		ctx.fillRect(0,0,canvas.width,canvas.height); //erases before pan
+		}
+
+	ctx.putImageData(canvasData, 0, 0); //draws image in canvas at 0,0
+
+	img.src = canvas.toDataURL(); //image data to image() object for scaling
+
+	ctx.setTransform(1,0,0,1,0,0); 		  	//blanks canvas
+	ctx.fillRect(0,0,canvas.width,canvas.height); 	//blanks canvas
+
+	if (initialLeftX != 0 && initialLeftY != 0) {
+		baseX = initialLeftX - ((initialZoom + zoomAdj) * ((initialLeftX - initialBaseX) / initialZoom));
+		baseY = initialLeftY - ((initialZoom + zoomAdj) * ((initialLeftY - initialBaseY) / initialZoom));
+		}	
+	zoom = initialZoom + zoomAdj;
+
+	ctx.setTransform(zoom, 0, 0, zoom, 0, 0); // applies zoom
+	ctx.drawImage(img,baseX/zoom,baseY/zoom);//draws image in canvas. X,Y based on panX and panY
+
+	document.getElementById('imageinfo').innerHTML = "Instance: " + s + " Center: " + Math.round(windowCenter) + " Width: " + Math.round(windowWidth) + " ";
+	previousS = s;
+	}
+
+//function to send adjustment data to drawSlice. Can actually be inserted into drawSlice(), but for clarity sake I separated it
+function adjust(s, windowCenterAdj, windowWidthAdj, panX, panY, zoomAdj, initialLeftX, initialLeftY) {
+	if (currentSlice + s >= 1 && pixelArray[currentSlice + s] != null) {
+		currentSlice = currentSlice + s;
+		ROI.length = 0;
+		drawSlice(currentSlice, windowCenterAdj, windowWidthAdj, panX, panY, zoomAdj, initialLeftX, initialLeftY);
+		} 
+	}
+
+function setWindow(winCenter, winWidth) {
+	if (winCenter == 'default') { winCenter = defaultWindowCenter; }
+	if (winWidth == 'default') { winWidth = defaultWindowWidth; }
+	ROI.length = 0;
+	windowCenter = winCenter;
+	windowWidth = winWidth;
+	initialWindowCenter = windowCenter;
+	initialWindowWidth = windowWidth;
+	drawSlice(currentSlice,0,0,0,0,0,0,0,1);
+	}
+
+function invertWindow() {
+	ROI.length = 0;
+	if (invert == 1) {
+		invert = -1;
+		} else {
+		invert = 1;
+		}
+	drawSlice(currentSlice,0,0,0,0,0,0,0,1);
+	}
+
+function resetAll() {
+	baseX = 0;
+	baseY = 0;
+	zoom = 1;
+	initialBaseX = 0;
+	initialBaseY = 0;
+	initialZoom = 1;
+	invert = 1; 
+	ROI.length = 0;
+	windowCenter = defaultWindowCenter;
+	windowWidth = defaultWindowWidth;
+	drawSlice(currentSlice,0,0,0,0,0,0,0,1);
+	}
+
+///////////////////////////////////////
+//BEGIN MOUSE EVENTS ON CANVAS
+///////////////////////////////////////
+canvas.addEventListener('mousedown', mouseDownListener, false);
+canvas.addEventListener('mousewheel',function(evt){
+    mouseWheel(evt);
+    return false;
+}, false);
+canvas.addEventListener('contextmenu', blockContextMenu);
+//document.addEventListener('contextmenu', blockContextMenu); //dammit, right click fails to open context when clicked outside. Need to be fixed.
+
+var initialLeftX;
+var initialLeftY;
+var whichButton;
+var leftButtonMode = "default";
+
+//mousewheel scrolls the stack
+function mouseWheel(evt) {
+	evt.preventDefault();
+	if (evt.wheelDelta > 0) { 
+		adjust(1,0,0,0,0,0,0,0);
+		} else {
+		adjust(-1,0,0,0,0,0,0,0);
+		}
+	}
+
+function mouseDownListener(evt) {
+	whichButton =  evt.which;
+	//getting mouse position correctly, being mindful of resizing that may have occured in the browser:
+	var bRect = canvas.getBoundingClientRect();
+	mouseX = (evt.clientX - bRect.left)*(canvas.width/bRect.width);
+	mouseY = (evt.clientY - bRect.top)*(canvas.height/bRect.height);
+	initialLeftX = mouseX;
+	initialLeftY = mouseY;
+	initialBaseX = baseX; //for centered zooming
+	initialBaseY = baseY; //for centered zooming
+	initialZoom = zoom; // for centered zooming
+	initialWindowCenter = windowCenter;
+	initialWindowWidth = windowWidth;
+	canvasDataBeforeGraphics = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+	window.addEventListener("mousemove", mouseMoveListener, false);
+	canvas.removeEventListener("mousedown", mouseDownListener, false);
+	window.addEventListener("mouseup", mouseUpListener, false);
+	if (evt.which == 1 && leftButtonMode == "pixel") { //left button - pixel lens
+		pixelLens(mouseX, mouseY);
+		}
+	}
+	
+function mouseMoveListener(evt) {
+	var posX;
+	var posY;
+	//getting mouse position correctly 
+	var bRect = canvas.getBoundingClientRect();
+	mouseX = (evt.clientX - bRect.left)*(canvas.width/bRect.width);
+	mouseY = (evt.clientY - bRect.top)*(canvas.height/bRect.height);
+	var leftXadj = mouseX - initialLeftX;
+	var leftYadj = mouseY - initialLeftY;
+	if (evt.which == 1 && leftButtonMode == "default") { //left button - panning
+		adjust(0,0,0,leftXadj,leftYadj,0,0,0,0,0);
+		}
+	if (evt.which == 1 && leftButtonMode == "line") { //left button - draw straight line
+		drawLine(leftXadj,leftYadj);
+		}
+	if (evt.which == 1 && leftButtonMode == "circle") { //left button - draw straight line
+		drawCircle(leftXadj,leftYadj,mouseX,mouseY);
+		}
+	if (evt.which == 2) { //middle button
+		adjust(0,0,0,0,0,(0-(leftXadj + leftYadj)*10) / 1000, initialLeftX, initialLeftY);
+		}
+	if (evt.which == 3) { //right button - windowing
+		adjust(0,-leftYadj,leftXadj,0,0,0,0,0);
+		}
+	}		
+
+function mouseUpListener(evt) {
+	initialZoom = zoom;
+	initialBaseX = baseX;
+	initialBaseY = baseY;
+	initialWindowCenter = windowCenter;
+	initialWindowWidth = windowWidth;
+	canvas.addEventListener("mousedown", mouseDownListener, false);
+	window.removeEventListener("mouseup", mouseUpListener, false);
+	window.removeEventListener("mousemove", mouseMoveListener, false);
+	}
+//disables right click context menu
+function blockContextMenu(evt) {
+	evt.preventDefault();
+	}
+///////////////////////////////////////
+//END MOUSE EVENTS ON CANVAS
+///////////////////////////////////////
+
+function changeLeftButtonMode(mode) {
+	var iconLine = document.getElementById('iconLine');
+	var iconPixel = document.getElementById('iconPixel');
+	var iconCircle = document.getElementById('iconCircle');
+	if (mode == "line") {
+		if (iconLine.value == "LineOff"	) {
+			iconLine.value = "LineOn";
+			iconPixel.value = "PixelOff";
+			iconCircle.value = "CircleOff";
+			leftButtonMode = "line";
+			} else {
+			iconLine.value = "LineOff";
+			leftButtonMode = "default";
+			}
+		}
+	if (mode == "pixel") {
+		if (iconPixel.value == "PixelOff"	) {
+			iconPixel.value = "PixelOn";
+			iconLine.value = "LineOff";
+			iconCircle.value = "CircleOff";
+			leftButtonMode = "pixel";
+			} else {
+			iconPixel.value = "PixelOff";
+			leftButtonMode = "default";
+			}
+		}
+	if (mode == "circle") {
+		if (iconCircle.value == "CircleOff"	) {
+			iconCircle.value = "CircleOn";
+			iconLine.value = "LineOff";
+			iconPixel.value = "PixelOff";
+			leftButtonMode = "circle";
+			} else {
+			iconCircle.value = "CircleOff";
+			leftButtonMode = "default";
+			}
+		}
+	}
+
+function drawLine(leftXadj,leftYadj) {
+	ctx.putImageData(canvasDataBeforeGraphics,0,0);
+	ctx.beginPath();
+	ctx.moveTo(initialLeftX / zoom, initialLeftY / zoom);
+	ctx.lineTo((initialLeftX + leftXadj) / zoom, (initialLeftY + leftYadj) / zoom);
+	ctx.lineWidth = 2;
+	ctx.strokeStyle = '#ffff00';
+	ctx.stroke();
+	var distance = Math.round(Math.sqrt((leftXadj * leftXadj * colDistance * colDistance) + (leftYadj * leftYadj * rowDistance * rowDistance)) / zoom);
+	ctx.font = 20 / zoom + "px Calibri";
+	ctx.strokeStyle = 'black';
+	ctx.lineWidth = 4;
+	ctx.strokeText(distance + "mm",(initialLeftX + (leftXadj / 2) + 20) / zoom, (initialLeftY + (leftYadj / 2) + 20) / zoom);
+	ctx.fillStyle = '#ffff00';
+	ctx.fillText(distance + "mm",(initialLeftX + (leftXadj / 2) + 20) / zoom, (initialLeftY + (leftYadj / 2) + 20) / zoom);
+	ctx.fillStyle = '#000000';	
+	}
+
+function pixelLens(mouseX, mouseY) {
+	ctx.putImageData(canvasDataBeforeGraphics,0,0);
+	var pixelX = Math.round((mouseX - baseX) / zoom);
+	var pixelY = Math.round((mouseY - baseY) / zoom);
+	var HU = parseInt(pixelArray[currentSlice][(pixelY * width) + pixelX]) + HUcorrection;	
+
+	ctx.font = 20 / zoom + "px Calibri";
+	ctx.strokeStyle = 'black';
+	ctx.lineWidth = 4;
+	ctx.strokeText(HU, (mouseX / zoom) + 20, (mouseY / zoom) + 20);
+	ctx.fillStyle = '#ffff00';
+	ctx.fillRect(mouseX / zoom, mouseY / zoom, 2, 2);
+	ctx.fillText(HU, (mouseX / zoom) + 20, (mouseY / zoom) + 20);
+	ctx.fillStyle = '#000000';	
+	}
+
+function drawCircle(leftXadj, leftYadj, mouseX, mouseY) {
+	ROI.length = 0;
+	ctx.putImageData(canvasDataBeforeGraphics,0,0);
+	var radius = Math.round(Math.sqrt((leftXadj * leftXadj) + (leftYadj * leftYadj)) / zoom);
+	var circlePix = [];
+	var c = 0;
+	var sum = 0;
+	var colLengthMax = 0;
+	for (row = Math.round(((initialLeftY - baseY) / zoom) - radius); row < Math.round(((initialLeftY - baseY) / zoom) + radius); row++) {
+		var colLength = radius;
+		for (col = Math.round(((initialLeftX - baseX) / zoom) - colLength); col < Math.round(((initialLeftX - baseX) / zoom)+ colLength); col++) {
+			var dist = Math.sqrt(((((initialLeftX - baseX) / zoom) - col) * (((initialLeftX - baseX) / zoom) - col)) + ((((initialLeftY - baseY) / zoom) - row) * (((initialLeftY - baseY) / zoom) - row)));
+			if (dist <= radius) {
+				ROI[(row * width) + col] = 1;
+				sum = sum + parseInt(pixelArray[currentSlice][(row * width) + col]) + HUcorrection;
+				c++;
+				}
+			}
+		}
+//	drawSlice(currentSlice,0,0,0,0,0,0,0,1);
+	
+	ctx.beginPath();
+	ctx.arc((initialLeftX / zoom), (initialLeftY / zoom), radius, 0, 2 * Math.PI, false);
+	ctx.globalAlpha = 1;
+	ctx.lineWidth = 1;
+	ctx.strokeStyle = '#ffff00';
+	ctx.stroke();
+	ctx.font = 20 / zoom + "px Calibri";
+	ctx.strokeStyle = 'black';
+	ctx.lineWidth = 4;
+	ctx.strokeText(Math.round(sum / c), (mouseX / zoom) + 20, (mouseY / zoom) + 20);
+	ctx.fillStyle = '#ffff00';
+	ctx.fillText(Math.round(sum / c), (mouseX / zoom) + 20, (mouseY / zoom) + 20);
+	ctx.fillStyle = '#000000';	
+	}
+
+function loadT2Star() {
+	var SI = [];
+	var SIstring = "";
+	var TEstring = "";
+
+	for (s = 1; s < TE.length; s++) {
+		var p = 0;
+		var sum = 0;
+		var c = 0;
+		for (var i = 0; i < height; i++) {
+			for (var j = 0; j < width; j++) { 
+				if (ROI[p] == 1) {
+					sum = sum + parseInt(pixelArray[s][p]);
+					c++;
+					}	
+				p++;
+				}
+			}
+		SI[s] = sum / c;
+		TEstring = TEstring + parseFloat(TE[s]).toFixed(2) + ",";
+		SIstring = SIstring + parseInt(SI[s]) + ",";
+		}
+	TEstring = TEstring.slice(0, -1);
+	SIstring = SIstring.slice(0, -1);
+	document.getElementById('showCurveIFrame').src = 'ic.html?TEstring=' + TEstring + '&SIstring=' + SIstring;
+	
+	document.getElementById('showCurveDiv').style.left =((window.innerWidth - 900) / 2) + 'px';
+	document.getElementById('showCurveDiv').style.display = "block";
+	
+	//window.open('ic.php?TEstring=' + TEstring + '&SIstring=' + SIstring);
+	}
+
+function closeShowCurveDiv() {
+	document.getElementById('showCurveDiv').style.display = 'none';
+	}
+
+function toggleInfoDiv() {
+	document.getElementById('infoDiv').style.left =((window.innerWidth - 900) / 2) + 'px';
+	if (document.getElementById('infoDiv').style.display == 'block') {
+		document.getElementById('infoDiv').style.display = 'none';
+		} else {
+		document.getElementById('infoDiv').style.display = 'block';
+		}
+	}
+	
+function handleFileSelect(evt) {
+	evt.stopPropagation();
+	evt.preventDefault();
+
+	var dcmFiles = evt.dataTransfer; 
+
+	fileProgressArea.innerHTML = "Loading...<br><font size=+1>This may take a few seconds for large / multiple DICOM files...</font>";
+	totalSlices = dcmFiles.files.length;
+	for (var i = 0; i < dcmFiles.files.length; i++) { readFiles(dcmFiles.files[i]); }
+	}
+
+function handleDragOver(evt) {
+	evt.stopPropagation();
+	evt.preventDefault();
+	evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+	}
+
+function warnDrop(evt) {
+	evt.stopPropagation();
+	evt.preventDefault();
+	if (confirm('Cannot load new study before closing current study.\n\nClose current study?')) {
+		window.location.reload();
+		}
+	}
+
+// Setup the dnd listeners.
+var dropZone = document.getElementById('fileLoaderLanding');
+var viewPort = document.getElementById('viewPort');
+dropZone.addEventListener('dragover', handleDragOver, false);
+dropZone.addEventListener('drop', handleFileSelect, false);
+viewPort.addEventListener('dragover', warnDrop, false);
+
+
+////
+
+var drawFlag=false;
+  var DrawingTemp;
+var ctxDrawingTemp;
+function enableDrawing() {
+DrawingTemp = document.getElementById('myCanvas');
+//ctxDrawingTemp = Drawing1.getContext('2d');
+     drawFlag=true;
+}
+
+function disableDrawing() {
+     drawFlag=false;
+}
+
+function eraseDrawing() {
+     var Drawing1 = document.getElementById('myCanvas');
+var ctxDrawing1 = Drawing1.getContext('2d');
+var width = Drawing1.width, height = Drawing1.height;
+  ctxDrawing1.clearRect(0, 0, width, height);
+//DrawingNewCopy = document.getElementById('myCanvas');
+
+//  var destCtx = DrawingNewCopy.getContext('2d');
+
+//call its drawImage() function passing it the source canvas directly
+//destCtx.drawImage(DrawingTemp, 0, 0);
+
+}
+
+
+
+////
+
+var Drawing = document.getElementById('myCanvas');
+var ctxDrawing = Drawing.getContext('2d');
+// Get the canvasDrawing width and height
+var width = Drawing.width, height = Drawing.height;
+// Name some colors
+var red = '#F00', green = '#0F0', blue = '#00F', purple = '#A0F';
+// Create an array to save circle properties
+var circles = [ ];
+
+// Draw a circle with the given parameters:
+//   center: float array [x, y]
+//   radius: float > 0
+//   color: string "#RGB"
+//   fill: boolean
+function drawCircle(center, radius, color, fill) {
+  // Make an closed arc with a complete rotation
+  if(drawFlag){
+  ctxDrawing.beginPath();
+  ctxDrawing.arc(center[0], center[1], radius, 0, 2*Math.PI);
+  ctxDrawing.closePath();
+  ctxDrawing.lineWidth = 4;
+  // Choose whether to fill or outline the circle
+  if (fill) {
+    ctxDrawing.fillStyle = color;
+    ctxDrawing.fill();
+  } else {
+    ctxDrawing.strokeStyle = color;
+    ctxDrawing.stroke();
+  }
+}}
+
+// Transform Leap coordinates to canvasDrawing scene coordinates
+function leapToScene(position) {
+  var x = position[0];
+  var y = position[1];
+  // Shift the Leap origin to the canvasDrawing's bottom center and invert the y-axis
+  return [width/2 + x, height - y];
+}
+
+// Create a Leap controller to access frame data
+var controller = new Leap.Controller();
+
+// Register a callback to process frame data
+controller.on('frame', function(frame) {
+  // Clear the canvasDrawing so we can repaint
+ // ctxDrawing.clearRect(0, 0, width, height);
+  
+  // Draw a green circle to test the canvasDrawing
+ // drawCircle([width/2, 50], 20, green);
+  
+  // Make sure we have accumulated at most 200 circles
+  if (circles.length > 200) {
+    circles = circles.slice(-200); // Last 200 circles
+  }
+  
+  // Redraw accumulated circles
+  for (var c = 0; c < circles.length; c = c+1) {
+    // Retrieve the circle properties
+    var center = circles[c].center;
+    var radius = circles[c].radius;
+    // Redraw the circle filled in purple
+   // drawCircle(center, radius, purple, true);
+  }
+  
+  // Draw finger tips as colored circles
+  for (var f = 0; f < frame.fingers.length; f = f+1) {
+    var finger = frame.fingers[f];
+    // Calculate the circle center and radius
+    var center = leapToScene(finger.tipPosition);
+    var radius = Math.abs(finger.touchDistance) * 1.5;
+    // Determine if the finger is touching or not
+    var touching = finger.touchZone == 'touching';
+    // Decide the circle color and whether to fill it
+    var color;
+    var fill;
+    if (touching) {
+      color = red;
+      fill = true;
+      // Save the circle properties to redraw it later
+      var circle = {center: center, radius: radius};
+      circles.push(circle);
+    }
+    else {
+      color = blue;
+      fill = false;
+    }
+    // Finally, draw the circle
+    drawCircle(center, radius, color, fill);
+  }
+});
+
+// Connect the controller to start receiving data
+controller.connect();
+
+ 
+</script>
+
+<font size=-1>
+<br>
+1-finger circle: Scroll (clockwise: next, anti: back)<br>
+Open palm, face right/left: Window width<br>
+Open palm, face up/down: Window center<br>
+1-finger tap: Next window preset<br>
+* works best with CTs *<br>
+</font>
+<div id="leapStatus">Status</div>
+<script src="http://js.leapmotion.com/leap-0.6.3.min.js"></script>
+    <link href='http://fonts.googleapis.com/css?family=Fauna+One' rel='stylesheet' type='text/css'>
+    <link href='css/style.css' rel='stylesheet' type='text/css'>
+    <script type="text/javascript" src="js/Detector.js"></script>
+    <script type="text/javascript" src="js/jquery.min.js"></script>
+    <script type="text/javascript" src="js/three.min.js"></script>
+    <script type="text/javascript" src="js/leap.min.js"></script>
+    <script type="text/javascript" src="js/LeapCameraControls.js"></script>
+    <script type="text/javascript" src="js/LeapObjectControls.js"></script>
+
+
+<script src="js/RTCMultiConnection.js"></script>
+<script src="https://cdn.webrtc-experiment.com/FileBufferReader.js"></script>
+
+<!-- socket.io for signaling -->
+<script src="https://rtcmulticonnection.herokuapp.com/socket.io/socket.io.js"></script>
+
+<script>
+
+
+//Leapmotion
+var leapStatus = document.getElementById('leapStatus');
+
+var controllerOptions = {enableGestures: true};
+var completedRotation = 0;
+
+var a = 0;
+
+Leap.loop(controllerOptions, function(frame) {
+//	leapStatus.innerHTML = 'Leap.loop running...';
+
+/*	if (frame.hands.length > 0) {
+		// for windowing
+		initialWindowCenter = windowCenter;
+		initialWindowWidth = windowWidth;
+
+		for (var i = 0; i < frame.hands.length; i++) {
+			var hand = frame.hands[i];
+			//check open palm
+			var extendedFingers = 0;
+			for(var f = 0; f < hand.fingers.length; f++){
+				var finger = hand.fingers[f];
+				if(finger.extended) { extendedFingers++; }
+				}
+			if (extendedFingers > 2) { //consider palm open
+				if (hand.palmNormal[0].toFixed(1)  < -0.5 || hand.palmNormal[0].toFixed(1) > 0.5) { //palm pronate/supinate
+					adjust(0,0,hand.palmNormal[0].toFixed(1)*10,0,0,0,0,0);
+					a++;
+					}	
+				if (hand.palmNormal[2].toFixed(1)  < -0.5 || hand.palmNormal[2].toFixed(1) > 0.5) { //palm flex/extend
+					adjust(0,hand.palmNormal[2].toFixed(1)*10,0,0,0,0,0,0);
+					a++;
+					}	
+				leapStatus.innerHTML = hand.palmNormal[0].toFixed(1) + "<br>" + hand.palmNormal[2].toFixed(1) + "<br>" + a;
+				}
+			}
+
+		} */
+
+	if (frame.gestures.length > 0) {
+		for (var i = 0; i < frame.gestures.length; i++) {
+			var gesture = frame.gestures[i];
+			if (gesture.type == 'keyTap') {
+					currentWindowArray++; 
+					if (currentWindowArray == windowCenterArray.length) {
+						currentWindowArray = 0;
+						}
+				setWindow(windowCenterArray[currentWindowArray], windowWidthArray[currentWindowArray]);	
+				leapStatus.innerHTML = gesture.type;
+				
+				}
+			if (gesture.type == 'circle') {
+				var clockwise = false;
+				var pointableID = gesture.pointableIds[0];
+				var direction = frame.pointable(pointableID).direction;
+				var dotProduct = Leap.vec3.dot(direction, gesture.normal);
+				if (dotProduct  >  0) clockwise = true;
+				var currentRotation = gesture.progress.toFixed(0);
+				var newRotation = false;
+				if (currentRotation > completedRotation) {
+					completedRotation++;
+//					completedRotation = currentRotation;
+					newRotation = true;
+					}
+				leapStatus.innerHTML = gesture.state + 'Clockwise: ' + clockwise + '<br>Rotation<br>' + completedRotation + '<br>' + currentRotation + '<br>' + newRotation;
+				if (newRotation == true) {
+					if (clockwise == true) {
+						adjust(1,0,0,0,0,0,0,0);
+						} else {
+						adjust(-1,0,0,0,0,0,0,0);
+						}
+					}
+				if (gesture.state == 'stop') {
+					completedRotation = 0;
+					leapStatus.innerHTML = 'Gesture Stopped';
+					}
+				}
+			}
+		}
+	});
+
+</script>
+
+<script id="jsbin-javascript">
+
+///////////////////////////////////////////////////////////////////////////////////
+
+
+/*
+var width = window.innerWidth, height = window.innerHeight / 2;
+var size = 256;
+var canvasCube = document.getElementById('myCanvas'),
+    ctx = canvasCube.getContext('2d');
+var camera, scene, renderer, geometry, texture, mesh;
+
+function init() {
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(width, height);
+    document.body.appendChild(renderer.domElement);
+    
+  scene = new THREE.Scene();
+  
+    camera = new THREE.PerspectiveCamera(70, width / height, 1, 1000);
+    camera.position.z = 500;
+    scene.add(camera);
+    texture = new THREE.Texture(canvasCube);
+    var material = new THREE.MeshBasicMaterial({ map: texture });
+    geometry = new THREE.BoxGeometry( 400,400, 1 );
+    mesh = new THREE.Mesh( geometry, material );
+    scene.add( mesh );
+    canvas.width = canvas.height = size;
+}
+function animate() {
+    requestAnimationFrame(animate);
+  
+     texture.needsUpdate = true;
+  mesh.rotation.y += 0.01;
+    renderer.render(scene, camera);
+}
+init();
+animate();     
+
+*/
+</script>
+
+
+
+
+ 
+    <script type="text/javascript">
+
+
+//////////
+	// Get the canvasDrawing and a 2-dimensional drawing context
+
+    ////////////////
+
+      var camera, scene, renderer, projector, light,texture;
+      var objects = [], objectsControls = [], cameraControls;
+      var coords1, coords2, coords3;
+      var lastControlsIndex = -1, controlsIndex = -1, index = -1;
+       var texture2;
+        var backgroundScene ;
+        var backgroundCamera ;
+
+      function init() {
+        // is webgl supported?
+        if (!Detector.webgl) {
+          Detector.addGetWebGLMessage();
+          return false;
+        };
+        var canvasGl = document.getElementById('canvasGl');
+
+
+        // renderer
+        renderer = new THREE.WebGLRenderer({ canvas:canvasGl , antialias: true});
+        renderer.setSize(640,480);
+        renderer.setClearColor(0xffffff, 1);
+        $("#container").append(renderer.domElement);
+
+        // camera
+        camera = new THREE.PerspectiveCamera(25, 640/480, 0.1, 10000);
+        camera.position.x = 500;
+        camera.position.y = 500;
+        camera.position.z = 500;
+        var origin = new THREE.Vector3(0, 0, 0);
+        camera.lookAt(origin);
+
+        // leap camera controls
+        cameraControls = new THREE.LeapCameraControls(camera);
+
+        cameraControls.rotateEnabled  = false;
+        cameraControls.rotateSpeed    = 3;
+        cameraControls.rotateHands    = 1;
+        cameraControls.rotateFingers  = [2, 3];
+        
+        cameraControls.zoomEnabled    = false;
+        cameraControls.zoomSpeed      = 6;
+        cameraControls.zoomHands      = 1;
+        cameraControls.zoomFingers    = [4, 5];
+        cameraControls.zoomMin        = 50;
+        cameraControls.zoomMax        = 2000;
+        
+        cameraControls.panEnabled     = false;
+        cameraControls.panSpeed       = 2;
+        cameraControls.panHands       = 2;
+        cameraControls.panFingers     = [6, 12];
+        cameraControls.panRightHanded = false; // for left-handed person
+
+        // world
+        scene = new THREE.Scene(); 
+
+        // projector
+        projector = new THREE.Projector();       
+
+        // camera target coordinate system
+        coords1 = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, 75, 0xcccccc);
+        coords2 = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, 75, 0xcccccc);
+        coords3 = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), origin, 75, 0xcccccc);
+        scene.add(coords1);
+        scene.add(coords2);
+        scene.add(coords3);
+
+        // world coordinate system (thin dashed helping lines)
+        var lineGeometry = new THREE.Geometry();
+        var vertArray = lineGeometry.vertices;
+        vertArray.push(new THREE.Vector3(1000, 0, 0), origin, new THREE.Vector3(0, 1000, 0), origin, new THREE.Vector3(0, 0, 1000));
+        lineGeometry.computeLineDistances();
+        var lineMaterial = new THREE.LineDashedMaterial({color: 0xcccccc, dashSize: 1, gapSize: 2});
+        var coords = new THREE.Line(lineGeometry, lineMaterial);
+        scene.add(coords);
+
+        // cubes
+        for (var i = 0; i < 1; i ++) {
+
+var canvasCube = document.getElementById('myCanvas');
+
+   texture = new THREE.Texture(canvasCube);
+    var material = new THREE.MeshBasicMaterial({ map: texture });
+   var geometry = new THREE.CubeGeometry( 200,200, 1 );
+
+        	///
+        	     texture.needsUpdate = true;
+
+
+           var object = new THREE.Mesh( geometry, material );
+
+
+
+          object.receiveShadow = true;
+          
+     
+         object.position.x = 50;
+          object.position.y = 50;
+          object.position.z = 50;
+
+       //   object.rotation.x = Math.random()*2*Math.PI;
+         // object.rotation.y = Math.random()*2*Math.PI;
+         // object.rotation.z = Math.random()*2*Math.PI;
+
+          object.receiveShadow = true;
+////////////////////////////////////////////////////////////////////////////
+        // Load the background texture
+var canvasCube = document.getElementById('c');
+
+
+   texture2 = new THREE.Texture(canvasCube);
+
+//////////
+
+
+
+                 texture2.needsUpdate = true;
+                         var backgroundMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(2, 2, 0),
+            new THREE.MeshBasicMaterial({
+                map: texture2
+            }));
+
+        backgroundMesh .material.depthTest = false;
+        backgroundMesh .material.depthWrite = false;
+
+        // Create your background scene
+      backgroundScene = new THREE.Scene();
+       backgroundCamera = new THREE.Camera();
+        backgroundScene .add(backgroundCamera );
+        backgroundScene .add(backgroundMesh );
+
+
+
+
+////////////////////////////////////////////////////////////////////////
+
+
+          // leap object controls
+          var objectControls = new THREE.LeapObjectControls(camera, object);
+
+          objectControls.rotateEnabled  = true;
+          objectControls.rotateSpeed    = 3;
+          objectControls.rotateHands    = 1;
+          objectControls.rotateFingers  = [2, 3];
+          
+          objectControls.scaleEnabled   = true;
+          objectControls.scaleSpeed     = 3;
+          objectControls.scaleHands     = 1;
+          objectControls.scaleFingers   = [4, 5];
+          
+          objectControls.panEnabled     = true;
+          objectControls.panSpeed       = 3;
+          objectControls.panHands       = 2;
+          objectControls.panFingers     = [6, 12];
+          objectControls.panRightHanded = true; // for left-handed person
+
+          scene.add(object);
+          objects.push(object);
+          objectsControls.push(objectControls);
+        };
+
+        // light
+        light = new THREE.PointLight(0xefefef);
+        light.position = camera.position;
+        scene.add(light);
+
+        // listen to resize event
+        window.addEventListener('resize', onWindowResize, false);
+
+        // render (if no leap motion controller is detected, then this call is needed in order to see the plot)
+        render();
+      };
+      
+      function changeControlsIndex() {
+        if (lastControlsIndex == controlsIndex) {
+          if (index != controlsIndex && controlsIndex > -2) {
+            // new object or camera to control
+            if (controlsIndex > -2) {
+              if (index > -1) objects[index].material.color.setHex(0xefefef);
+              index = controlsIndex;
+              if (index > -1) objects[index].material.color.setHex(0xff0000);
+            }
+          };
+        }; 
+        lastControlsIndex = controlsIndex;
+      };
+
+      function transform(tipPosition, w, h) {
+        var width = 150;
+        var height = 150;
+        var minHeight = 100;
+
+        var ftx = tipPosition[0];
+        var fty = tipPosition[1];
+        ftx = (ftx > width ? width - 1 : (ftx < -width ? -width + 1 : ftx));
+        fty = (fty > 2*height ? 2*height - 1 : (fty < minHeight ? minHeight + 1 : fty));
+        var x = THREE.Math.mapLinear(ftx, -width, width, 0, w);
+        var y = THREE.Math.mapLinear(fty, 2*height, minHeight, 0, h);
+        return [x, y];
+      };
+
+      function showCursor(frame) {
+        var hl = frame.hands.length;
+        var fl = frame.pointables.length;
+
+
+        if (hl == 1 && fl == 1) {
+          var f = frame.pointables[0];
+          var cont = $(renderer.domElement);
+          var offset = cont.offset();
+          var coords = transform(f.tipPosition, cont.width(), cont.height());
+          $("#cursor").css('left', offset.left + coords[0] - (($("#cursor").width() - 1)/2 + 1));
+          $("#cursor").css('top', offset.top + coords[1] - (($("#cursor").height() - 1)/2 + 1));
+        } else {
+          $("#cursor").css('left', -1000);
+          $("#cursor").css('top', -1000);
+        };
+      };
+
+      function focusObject(frame) {
+        var hl = frame.hands.length;
+        var fl = frame.pointables.length;
+
+        if (hl == 1 && fl == 1) {
+          var f = frame.pointables[0];
+          var cont = $(renderer.domElement);
+          var coords = transform(f.tipPosition, cont.width(), cont.height());
+          var vpx = (coords[0]/cont.width())*2 - 1;
+          var vpy = -(coords[1]/cont.height())*2 + 1;
+          var vector = new THREE.Vector3(vpx, vpy, 0.5);
+          projector.unprojectVector(vector, camera);
+          var raycaster = new THREE.Raycaster(camera.position, vector.sub(camera.position).normalize());
+          var intersects = raycaster.intersectObjects(objects);
+          if (intersects.length > 0) { 
+            var i = 0;
+            while(!intersects[i].object.visible) i++;
+            var intersected = intersects[i];
+            return objects.indexOf(intersected.object);
+          } else {
+            return -1;
+          };
+        };
+
+        return -2;
+      };
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+function animate() {
+    requestAnimationFrame(animate);
+  
+     texture.needsUpdate = true;
+ //   mesh.rotation.y += 0.01;
+}
+///
+
+
+ function animate2() {
+    requestAnimationFrame(animate2);
+  
+     texture2.needsUpdate = true;
+ //   mesh.rotation.y += 0.01;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+      function render() {
+animate();
+animate2();
+
+  renderer.autoClear = false;
+            renderer.clear();
+            renderer.render(backgroundScene , backgroundCamera );
+        renderer.render(scene, camera);
+      };
+
+      function onWindowResize() {
+        camera.aspect = $(window).width()/$(window).height();
+        camera.updateProjectionMatrix();
+        renderer.setSize($(window).width(), $(window).height());
+        render();
+      };
+
+      $(function(){
+        init();
+
+        // leap loop
+        Leap.loop(function(frame) {
+          // show cursor
+          if(!drawFlag){
+
+          showCursor(frame);
+                    controlsIndex = focusObject(frame);
+
+      }
+
+          // set correct camera control
+          if (index == -1) {
+            cameraControls.update(frame);
+          } else {
+            objectsControls[index].update(frame);
+          };
+
+          // custom modifications (here: show coordinate system always on target and light movement)
+          coords1.position = cameraControls.target;
+          coords2.position = cameraControls.target;
+          coords3.position = cameraControls.target;
+          light.position   = camera.position;
+
+          render();
+        });
+
+        // detect controls change
+        setInterval(changeControlsIndex, 250);
+      });
+    </script> 
+
+
+
+<script>
+
+if (!window.atob) {
+	var tableStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	var table = tableStr.split("");
+
+	window.atob = function (base64) {
+		if (/(=[^=]+|={3,})$/.test(base64)) throw new Error("String contains an invalid character");
+		base64 = base64.replace(/=/g, "");
+		var n = base64.length & 3;
+		if (n === 1) throw new Error("String contains an invalid character");
+		for (var i = 0, j = 0, len = base64.length / 4, bin = []; i < len; ++i) {
+			var a = tableStr.indexOf(base64[j++] || "A"), b = tableStr.indexOf(base64[j++] || "A");
+			var c = tableStr.indexOf(base64[j++] || "A"), d = tableStr.indexOf(base64[j++] || "A");
+			if ((a | b | c | d) < 0) throw new Error("String contains an invalid character");
+			bin[bin.length] = ((a << 2) | (b >> 4)) & 255;
+			bin[bin.length] = ((b << 4) | (c >> 2)) & 255;
+			bin[bin.length] = ((c << 6) | d) & 255;
+			};
+		return String.fromCharCode.apply(null, bin).substr(0, bin.length + n - 4);
+	};
+}
+
+function base64ToHex(str) {
+	for (var i = 0, bin = atob(str.replace(/[ \r\n]+$/, "")), hex = []; i < bin.length; ++i) {
+		var tmp = bin.charCodeAt(i).toString(16);
+		if (tmp.length === 1) { tmp = "0" + tmp; }
+		hex[hex.length] = tmp;
+	}
+	return hex.join("");
+}
+
+function hextostring(d) {
+	return ('' + d).replace(/.(.)/g, '$1')
+}
+
+function hex2a(hexx) {
+	var hex = hexx.toString();//force conversion
+	var str = '';
+	for (var i = 0; i < hex.length; i += 2) {
+		str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+	}
+	return str;
+}
+
+function getDcmTag(content, tag, manualStart) {
+	manualStart = manualStart || 0;
+	var start = content.indexOf(tag, manualStart);
+	while (start/2 != parseInt(start/2) && start != -1) {
+		start = content.indexOf(tag,start+1);
+		}
+//	if (start > content.lastIndexOf('e07f1000')) { return; } //only look for tags before 7fe0-0010
+	lastFoundTagLocation = start;
+	var length = parseInt("" + content.substr(start+14, 2) + content.substr(start+12, 2), 16); 
+	var VR = hex2a(content.substr(start+8, 4));
+
+	//based on VR, interpret the value. At the moment, very minimal support!!!
+	if (VR == "US") {
+		var value = parseInt("" + content.substr(start+18,2) + content.substr(start+16,2), 16);
+		} else if (VR == "FD") {
+		var buffer = new ArrayBuffer(8);
+		var bytes = new Uint8Array(buffer);
+		var doubles = new Float64Array(buffer);
+		bytes[7] = "0x" + content.substr(start+30,2);
+		bytes[6] = "0x" + content.substr(start+28,2);
+		bytes[5] = "0x" + content.substr(start+26,2);
+		bytes[4] = "0x" + content.substr(start+24,2);
+		bytes[3] = "0x" + content.substr(start+22,2);
+		bytes[2] = "0x" + content.substr(start+20,2);
+		bytes[1] = "0x" + content.substr(start+18,2);
+		bytes[0] = "0x" + content.substr(start+16,2);
+		var value = doubles[0];
+		} else if (VR == "DS" || VR == "PN" || VR =="LO" || VR == "CS" || VR == "LT" || VR == "DA" || VR == "UI" || VR == "IS") {
+		var value = hex2a(content.substr(start+16, length*2)); //length is in 2bytes
+		} else { // scrambled DICOM, no VR!
+//		alert(VR);
+//		var value = hex2a(content.substr(start+16, length*2)); //length is in 2bytes
+		var value = "";
+		//have to detect VR type!!!
+		}
+	return value;
+}
+
+function hexLEtoDec(pixelData) {
+	var result = [];
+	var curCol = 0;
+	var curRow = 0;
+	var p = 0;
+//	bitsAllocated = bitsAllocated || 16;
+	if (bitsAllocated == 8) {
+		for (var i = 0; i < pixelData.length; i += 2) {	
+			var pixel = parseInt(pixelData.substr(i, 2), 16);		
+			if ((curCol * downScale) == parseInt(curCol * downScale) && (curRow * downScale) == parseInt(curRow * downScale)) {
+				result[p] = pixel;
+				p++;	
+				}
+			curCol++;
+			if (curCol == width/downScale) {
+				curRow++;
+				curCol = 0;
+				}
+			}
+		} else {
+		for (var i = 0; i < pixelData.length; i += 4) {
+			var pixel = parseInt(pixelData.substr(i+2, 2) + pixelData.substr(i, 2), 16);
+			if (pixelRepresentation == 1) {
+				if (pixel > 32768) { pixel = pixel - 65536; } //signed
+				}
+			if ((curCol * downScale) == parseInt(curCol * downScale) && (curRow * downScale) == parseInt(curRow * downScale)) {
+				result[p] = pixel;
+				p++;	
+				}
+			curCol++;
+			if (curCol == width/downScale) {
+				curRow++;
+				curCol = 0;
+				}
+			}
+		}
+	return result;
+	}
+
+</script>
+
+<script type="text/javascript">
+
+    
+    // ......................................................
+// .......................UI Code........................
+// ......................................................
+
+
+
+
+// ......................................................
+// ..................RTCMultiConnection Code.............
+// ......................................................
+
+
+
+
+(function (win) {
+  "use strict";
+
+  win.requestAnimationFrame = win.requestAnimationFrame ||
+                              win.msRequestAnimationFrame ||
+                              win.mozRequestAnimationFrame ||
+                              win.webkitRequestAnimationFrame;
+
+ 
+
+  // Fallback for browsers that don't provide
+  // the requestAnimationFrame API (e.g. Opera).
+  if (!win.requestAnimationFrame) {
+    win.requestAnimationFrame = function (callback) {
+      setTimeout(callback, 0);
+    };
+  }
+
+  // Fallback for browsers that don't provide
+  // the URL.createObjectURL API (e.g. Opera).
+  if (!win.URL || !win.URL.createObjectURL) {
+    win.URL = win.URL || {};
+    win.URL.createObjectURL = function (obj) {
+      return obj;
+    };
+  }
+
+})(window);
+
+
+
+
+
+
+
+/////////////////////------greenscreen///////////////
+
+
+
+
+
+    // all webrtc code ------------------------------------------------//////////////////////////////
+    //nav.getUserMedia({video: true}, startStream, function () {});
+//-------------------------------write to cancas code above///////////
+
+var localVideo = document.getElementById('localVideo');  //this is the remote stream handler
+ 
+var remoteVideo = document.getElementById('remoteVideo'); //not this
+
+
+
+var vw;
+var vh;
+
+var canvasPeer =     document.getElementById('c');        // canvas element itself is at index 0
+var contextPeer = canvasPeer.getContext("2d");    // getContext on canvas element itself
+
+// setup canvas when metadata is available
+localVideo.addEventListener("loadedmetadata", function() {
+    vw = this.videoWidth || this.width;   // these are on video element itself
+    vh = this.videoHeight || this.height;
+    canvasPeer.width = vw
+    canvasPeer.height = vh;
+                console.log('in listener');
+
+}, false);
+
+// call it straight, use global (or parent) variables
+localVideo.addEventListener("play", draw, false);
+
+function draw() {
+    if (localVideo.paused || localVideo.ended) {
+                    console.log('in draw');
+
+        return;
+    }
+
+    contextPeer.drawImage(localVideo, 0, 0, vw, vh);
+     
+    requestAnimationFrame(draw);  // loop anim. using rAF
+}
+
+
+
+
+
+document.getElementById('open-room').onclick = function() {
+    this.disabled = true;
+    connection.open(document.getElementById('room-id').value);
+};
+document.getElementById('join-room').onclick = function() {
+    this.disabled = true;
+    connection.join(document.getElementById('room-id').value);
+};
+document.getElementById('open-or-join-room').onclick = function() {
+    this.disabled = true;
+    connection.openOrJoin(document.getElementById('room-id').value);
+};
+// ......................................................
+// ................FileSharing/TextChat Code.............
+// ......................................................
+document.getElementById('share-file').onclick = function() {
+    var fileSelector = new FileSelector();
+    fileSelector.selectSingleFile(function(file) {
+        connection.send(file);
+    });
+};
+document.getElementById('input-text-chat').onkeyup = function(e) {
+    if(e.keyCode != 13) return;
+    
+    // removing trailing/leading whitespace
+    this.value = this.value.replace(/^\s+|\s+$/g, '');
+    if (!this.value.length) return;
+    
+    connection.send(this.value);
+    appendDIV(this.value);
+    this.value =  '';
+};
+        var videosContainer = document.getElementById('videos-container') || document.body;
+var chatContainer = document.querySelector('.chat-output');
+function appendDIV(event) {
+    var div = document.createElement('div');
+    div.innerHTML = event.data || event;
+    chatContainer.insertBefore(div, chatContainer.firstChild);
+    div.tabIndex = 0; div.focus();
+    
+    document.getElementById('input-text-chat').focus();
+}
+
+
+var canvasGl =     document.getElementById('canvasGl');        // canvas element itself is at index 0
+
+var streamforpeer = canvasGl.captureStream(24);
+/////
+
+var options = {
+    localMediaConstraints: {
+        audio: true,
+        video: true
+    },
+    onGettingLocalMedia: function(streamforpeer) {},
+    onLocalMediaError: function(error) {}
+};
+
+////
+
+var connection = new RTCMultiConnection();
+
+connection.dontCaptureUserMedia = true;
+      connection.attachStreams.push( streamforpeer );
+    ///  connection.open( );
+
+//connection.getUserMediaHandler(options);
+
+connection.socketURL = 'https://rtcmulticonnection.herokuapp.com:443/';
+connection.enableFileSharing = true; // by default, it is "false".
+
+connection.session = {
+    audio: true,
+    video: true,
+    data : true
+};
+connection.sdpConstraints.mandatory = {
+    OfferToReceiveAudio: true,
+    OfferToReceiveVideo: true
+};
+/*connection.onstream = function(event) {
+    document.body.appendChild(event.mediaElement);
+               videosContainer.insertBefore(event.mediaElement, videosContainer.firstChild);
+                event.mediaElement.play();
+
+
+};  */
+
+//////////////////////
+
+var attachMediaStream = null;
+var reattachMediaStream = null;
+var numberOfRemoteVideos = 0;
+connection.onstream = function(e) {
+    if (e.type == 'remote') {
+     if(e.extra.userid == 'doctor'){
+  console.log(e.extra.userid);
+        console.log(e.extra.userid);
+      var  localStream = e.stream;
+        attachMediaStream(localVideo, e.stream);
+        localVideo.muted = true;
+        localVideo.style.opacity = 1;
+        }
+       else{
+   document.body.appendChild(e.mediaElement);
+
+
+}
+ }
+
+    
+};
+
+
+/*
+function appendVideo(e, style) {
+    createVideoContainer(e, style, function(div) {
+        var video = document.createElement('video');
+        video.className = 'other-videos';
+        video.setAttribute('style', 'height:auto;opacity:1;');
+        video.id = e.userid;
+        video.src = URL.createObjectURL(e.stream)        var remote = document.getElementById('remote');
+        div.appendChild(video);
+        video.play();
+    });
+}
+function createVideoContainer(e, style, callback) {
+    var div = document.createElement('div');
+    div.setAttribute('style', style || 'float:left;opacity: 1;width: 32%;');
+    remote.insertBefore(div, remote.firstChild);
+    if (callback) callback(div);
+}
+// if user left
+connection.onleave = function(e) {
+    var video = document.getElementById(e.userid);
+    if (numberOfRemoteVideos == 1) {
+        transitionToWaiting();
+    } else if (video && video.parentNode && video.parentNode.parentNode) {
+        numberOfRemoteVideos--;
+        video.parentNode.parentNode.removeChild(video.parentNode);
+    }
+};
+function waitForRemoteVideo() {
+    // Call the getVideoTracks method via adapter.js.
+    var videoTracks = remoteStream.getVideoTracks();
+    if (videoTracks.length === 0 || remoteVideo.currentTime > 0) {
+        transitionToActive();
+    } else {
+        setTimeout(waitForRemoteVideo, 100);
+    }
+}
+   */
+  // Attach a media stream to an element.
+ 
+    attachMediaStream = function(element, stream) {
+        if (typeof element.srcObject !== 'undefined') {
+            element.srcObject = stream;
+        } else if (typeof element.mozSrcObject !== 'undefined') {
+            element.mozSrcObject = stream;
+        } else if (typeof element.src !== 'undefined') {
+            element.src = URL.createObjectURL(stream);
+        } else {
+            console.log('Error attaching stream to element.');
+        }
+
+ 
+    };
+    connection.onmessage = appendDIV;
+connection.filesContainer = document.getElementById('file-container');
+connection.onopen = function() {
+    document.getElementById('share-file').disabled      = false;
+    document.getElementById('input-text-chat').disabled = false;
+};
+
+   
+
+    // all webrtc code ------------------------------------------------//////////////////////////////
+
+
+ 
+
+
+
+/////
+
+
+
+/////////////////////------greenscreen///////////////
+
+
+
+
+</script>
+
